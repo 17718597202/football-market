@@ -1,0 +1,41 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: yuce
+      POSTGRES_PASSWORD: yucepass
+      POSTGRES_DB: yuce
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+  web:
+    build: .
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://yuce:yucepass@db:5432/yuce?schema=public
+    env_file:
+      - .env
+    ports:
+      - '3000:3000'
+    command: sh -c "npx prisma migrate deploy && npm start"
+
+  worker:
+    build: .
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://yuce:yucepass@db:5432/yuce?schema=public
+    env_file:
+      - .env
+    command: npx tsx scripts/worker.ts
+
+volumes:
+  pgdata:

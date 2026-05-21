@@ -1,0 +1,261 @@
+// =========================================================
+// 足球预测平台 - 数据库 Schema
+// 切换到 Postgres：把 provider 改为 "postgresql"
+// =========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================
+// 用户
+// =========================================================
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  passwordHash  String
+  role          String   @default("USER") // USER | ADMIN
+  // USDT 余额（字符串存储 Decimal，避免精度问题）
+  balanceUsdt   String   @default("0")
+  frozenUsdt    String   @default("0")
+  // 用户绑定的 TRC20 充值来源地址（充值匹配用）
+  tronAddress   String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bets          Bet[]
+  parlayBets    ParlayBet[]
+  deposits      Deposit[]
+  withdrawals   Withdrawal[]
+  transactions  Transaction[]
+
+  @@index([role])
+}
+
+// =========================================================
+// 比赛
+// =========================================================
+model Match {
+  id            String   @id @default(cuid())
+  // football-data.org 的比赛 ID（用于同步与去重）
+  externalId    String?  @unique
+  competition   String   // "Premier League", "La Liga" ...
+  homeTeam      String
+  awayTeam      String
+  homeLogo      String?
+  awayLogo      String?
+  kickoffAt     DateTime
+  status        String   @default("SCHEDULED") // SCHEDULED | LIVE | FINISHED | CANCELLED | POSTPONED
+  homeScore     Int?
+  awayScore     Int?
+  // 最终结果：HOME_WIN | DRAW | AWAY_WIN
+  finalResult   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  markets       Market[]
+
+  @@index([status])
+  @@index([kickoffAt])
+}
+
+// =========================================================
+// 市场（一场比赛可以挂多个市场，如 1X2、大小球）
+// =========================================================
+model Market {
+  id            String   @id @default(cuid())
+  matchId       String
+  match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  // 市场类型：RESULT_1X2(胜平负) | OVER_UNDER_2_5(大小球2.5) | BOTH_TEAMS_SCORE(双方进球) ...
+  type          String   @default("RESULT_1X2")
+  title         String   // 展示用，如 "切尔西 vs 阿森纳 - 全场胜平负"
+  description   String?
+  status        String   @default("OPEN") // OPEN | LOCKED | RESOLVED | VOIDED
+  // 锁单时间（开赛前停止下注）
+  lockAt        DateTime
+  // 平台抽水（基点）。下注瞬间快照，结算时按此分配
+  rakeBps       Int      @default(300)
+  // 结算后填充
+  winningKey    String?  // "HOME" | "DRAW" | "AWAY" | "OVER" | "UNDER" 等
+  totalStake    String   @default("0") // 池子总额（USDT 字符串）
+  totalRake     String   @default("0") // 平台抽走的部分
+  settledAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  options       MarketOption[]
+  bets          Bet[]
+  parlayItems   ParlayItem[]
+
+  @@index([matchId])
+  @@index([status])
+}
+
+// =========================================================
+// 市场选项
+// =========================================================
+model MarketOption {
+  id            String   @id @default(cuid())
+  marketId      String
+  market        Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  key           String   // "HOME" | "DRAW" | "AWAY" 等
+  label         String   // 展示文案，如 "切尔西胜"
+  totalStake    String   @default("0") // 该选项累计押注 USDT
+  betCount      Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  bets          Bet[]
+  parlayItems   ParlayItem[]
+
+  @@unique([marketId, key])
+}
+
+// =========================================================
+// 下注
+// =========================================================
+model Bet {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  marketId      String
+  market        Market   @relation(fields: [marketId], references: [id])
+  optionId      String
+  option        MarketOption @relation(fields: [optionId], references: [id])
+  amount        String   // 下注 USDT
+  status        String   @default("ACTIVE") // ACTIVE | WON | LOST | VOIDED
+  payout        String?  // 中奖时填，含本金
+  createdAt     DateTime @default(now())
+  settledAt     DateTime?
+
+  @@index([userId])
+  @@index([marketId])
+  @@index([status])
+}
+
+// =========================================================
+// 充值（TRC20 USDT 链上转入）
+// =========================================================
+model Deposit {
+  id            String   @id @default(cuid())
+  userId        String?  // 通过 fromAddress 关联到用户
+  user          User?    @relation(fields: [userId], references: [id])
+  txHash        String   @unique
+  fromAddress   String
+  toAddress     String   // 平台热钱包
+  amount        String   // USDT 金额
+  blockNumber   BigInt
+  status        String   @default("PENDING") // PENDING | CONFIRMED | CREDITED | UNMATCHED
+  confirmations Int      @default(0)
+  rawData       String?  // 原始 tx JSON
+  createdAt     DateTime @default(now())
+  creditedAt    DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([fromAddress])
+}
+
+// =========================================================
+// 提现
+// =========================================================
+model Withdrawal {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  toAddress     String
+  amount        String   // USDT 金额（含手续费前）
+  fee           String   @default("0")
+  netAmount     String   // 实际链上转账金额
+  status        String   @default("PENDING") // PENDING | APPROVED | REJECTED | SENT | FAILED
+  txHash        String?
+  reviewedBy    String?  // 审核管理员 ID
+  reviewedAt    DateTime?
+  remark        String?  // 审核备注
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+// =========================================================
+// 账户流水（统一记录所有资金变动）
+// =========================================================
+model Transaction {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  type          String   // DEPOSIT | WITHDRAW_LOCK | WITHDRAW_RELEASE | WITHDRAW_REFUND | BET_PLACE | BET_PAYOUT | BET_REFUND | ADJUSTMENT
+  amount        String   // 正负数（字符串表示 Decimal）
+  balanceAfter  String
+  refType       String?  // 关联实体类型: BET | DEPOSIT | WITHDRAWAL
+  refId         String?
+  remark        String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// =========================================================
+// 全局配置（运行时可改）
+// =========================================================
+model Setting {
+  key           String   @id
+  value         String
+  updatedAt     DateTime @updatedAt
+}
+
+// =========================================================
+// 扫块进度
+// =========================================================
+model ScanCursor {
+  id            String   @id @default("trc20_usdt")
+  lastTimestamp BigInt   @default(0)
+  lastTxHash    String?
+  updatedAt     DateTime @updatedAt
+}
+
+// =========================================================
+// 串关投注 (Fixed-Odds Parlay Bet Ticket)
+// =========================================================
+model ParlayBet {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  amount        String       // 投注本金 (Decimal 字符串)
+  odds          String       // 投注瞬间乘积锁死总赔率 (Decimal 字符串)
+  status        String       @default("ACTIVE") // ACTIVE | WON | LOST | VOIDED
+  payout        String?      // 中奖时分发的本息总额 (Decimal 字符串)
+  createdAt     DateTime     @default(now())
+  settledAt     DateTime?
+
+  items         ParlayItem[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// =========================================================
+// 串关单场详情 Leg (Parlay leg selection)
+// =========================================================
+model ParlayItem {
+  id            String       @id @default(cuid())
+  parlayBetId   String
+  parlayBet     ParlayBet    @relation(fields: [parlayBetId], references: [id], onDelete: Cascade)
+  marketId      String
+  market        Market       @relation(fields: [marketId], references: [id])
+  optionId      String
+  option        MarketOption @relation(fields: [optionId], references: [id])
+  odds          String       // 投注瞬间此单场选项的锁死赔率 (Decimal 字符串)
+  status        String       @default("ACTIVE") // ACTIVE | WON | LOST | VOIDED
+
+  @@index([parlayBetId])
+  @@index([marketId])
+  @@index([status])
+}
