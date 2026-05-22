@@ -30,23 +30,36 @@ async function tick() {
     });
   }
 
-  const minBlock = Number(cursor.lastBlockNumber);
-  console.log(`[scan] 拉取 ${cfg.hotWallet} 自区块 ${minBlock} 起的入账`);
+  let minBlock = Number(cursor.lastBlockNumber);
+  const currentBlock = await getCurrentBlock();
+  
+  if (minBlock >= currentBlock) {
+    return; // 没有新区块
+  }
 
-  let transfers: Awaited<ReturnType<typeof fetchBep20Transfers>>;
+  // 每次 tick 最多扫 20 个区块（约 1 分钟的量），防止落后太多时一次性发几千个请求被节点拉黑
+  const maxBlock = Math.min(minBlock + 20, currentBlock);
+
+  if (currentBlock - minBlock > 100) {
+    console.log(`[scan] ⚠️ 严重落后！当前区块 ${currentBlock}，游标 ${minBlock}，正在加速追赶...`);
+  }
+
+  let allTransfers: any[] = [];
   try {
-    transfers = await fetchBep20Transfers(cfg.hotWallet, {
-      minBlockNumber: minBlock,
-    });
+    const promises = [];
+    for (let b = minBlock + 1; b <= maxBlock; b++) {
+      promises.push(fetchBep20Transfers(cfg.hotWallet, b));
+    }
+    const results = await Promise.all(promises);
+    allTransfers = results.flat();
   } catch (e: any) {
-    console.error('[scan] BscScan 错误:', e.message);
+    console.error('[scan] RPC 扫块错误:', e.message);
     return;
   }
 
-  let latestBlock = minBlock;
-  for (const t of transfers) {
+  for (const t of allTransfers) {
     if (t.to.toLowerCase() !== cfg.hotWallet.toLowerCase()) continue;
-    if (t.blockNumber > latestBlock) latestBlock = t.blockNumber;
+
 
     // 去重
     const dup = await prisma.deposit.findUnique({ where: { txHash: t.txHash } });
@@ -104,12 +117,10 @@ async function tick() {
     });
   }
 
-  if (latestBlock > minBlock) {
-    await prisma.scanCursor.update({
-      where: { id: 'bep20_usdt' },
-      data: { lastBlockNumber: BigInt(latestBlock) },
-    });
-  }
+  await prisma.scanCursor.update({
+    where: { id: 'bep20_usdt' },
+    data: { lastBlockNumber: BigInt(maxBlock) },
+  });
 }
 
 async function main() {

@@ -8,7 +8,6 @@ import { ethers } from 'ethers';
 export function getBscConfig() {
   return {
     rpcUrl: process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/',
-    bscScanApiKey: process.env.BSCSCAN_API_KEY || '',
     usdtContract: process.env.USDT_CONTRACT_ADDRESS || '0x55d398326f99059fF775485246999027B3197955',
     hotWallet: process.env.HOT_WALLET_ADDRESS || '',
     hotWalletPk: process.env.HOT_WALLET_PRIVATE_KEY || '',
@@ -26,63 +25,53 @@ export async function isValidBscAddress(addr: string): Promise<boolean> {
   return ethers.isAddress(addr);
 }
 
-/** 通过 BscScan API 拉取某地址的 BEP20 USDT 转入记录 */
+/** 通过全节点直接拉取指定区块内的 BEP20 USDT 充值记录 */
 export async function fetchBep20Transfers(
   toAddress: string,
-  options: { minBlockNumber?: number } = {}
+  blockNumber: number
 ) {
   const cfg = getBscConfig();
-  if (!cfg.bscScanApiKey) {
-    throw new Error('BSCSCAN_API_KEY 未配置');
+  const provider = getProvider();
+
+  // 连带拉取该区块内所有的交易详情
+  const block = await provider.getBlock(blockNumber, true);
+  if (!block || !block.prefetchedTransactions) return [];
+
+  const results = [];
+  const TRANSFER_SIG = '0xa9059cbb'; // transfer(address,uint256)
+  const targetContract = cfg.usdtContract.toLowerCase();
+  const targetRecipient = toAddress.toLowerCase();
+
+  for (const tx of block.prefetchedTransactions) {
+    if (tx.to && tx.to.toLowerCase() === targetContract) {
+      if (tx.data.startsWith(TRANSFER_SIG) && tx.data.length >= 138) {
+        // data 结构: 0xa9059cbb (4 bytes) + to (32 bytes) + value (32 bytes)
+        const decodedTo = '0x' + tx.data.substring(34, 74);
+        
+        if (decodedTo.toLowerCase() === targetRecipient) {
+          // 只命中极少数交易，所以这里拉取 receipt 确认是否执行成功不会造成性能负担
+          const receipt = await provider.getTransactionReceipt(tx.hash);
+          if (receipt && receipt.status === 1) {
+            const amountHex = '0x' + tx.data.substring(74);
+            const amountUsdt = ethers.formatUnits(amountHex, 18);
+            
+            results.push({
+              txHash: tx.hash,
+              from: tx.from,
+              to: toAddress,
+              amountUsdt,
+              blockTimestamp: block.timestamp * 1000,
+              blockNumber: block.number,
+              tokenSymbol: 'USDT',
+              rawData: { hash: tx.hash, data: tx.data },
+            });
+          }
+        }
+      }
+    }
   }
 
-  const params = new URLSearchParams({
-    module: 'account',
-    action: 'tokentx',
-    contractaddress: cfg.usdtContract,
-    address: toAddress,
-    page: '1',
-    offset: '100',
-    sort: 'asc',
-    apikey: cfg.bscScanApiKey,
-  });
-
-  if (options.minBlockNumber) {
-    params.set('startblock', String(options.minBlockNumber));
-  }
-
-  const url = `https://api.bscscan.com/api?${params.toString()}`;
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`BscScan HTTP Error ${res.status}: ${await res.text()}`);
-  }
-  const json = await res.json();
-  
-  if (json.status !== '1' && json.message !== 'No transactions found') {
-    throw new Error(`BscScan API 错误: ${json.message} - ${json.result}`);
-  }
-
-  const txs = json.result;
-  if (!Array.isArray(txs)) return [];
-
-  // 过滤出只有转入到 toAddress 的记录
-  const incoming = txs.filter((tx: any) => tx.to.toLowerCase() === toAddress.toLowerCase());
-
-  return incoming.map((tx: any) => ({
-    txHash: tx.hash,
-    from: tx.from,
-    to: tx.to,
-    // BscScan 的 BEP20 USDT 精度是 18 位，可以使用我们原本为 TRON 的 sunToUsdt 工具，
-    // 但是等等！USDT 在 BSC 上的精度是 18 位 (1 USDT = 10^18 wei)。而在 TRON 上是 6 位 (10^6 sun)。
-    // 这里如果直接用 `sunToUsdt` (假设它写死了 / 1e6) 就会有问题。
-    // 我们用 ethers.formatUnits(tx.value, 18) 会更精确。
-    amountUsdt: ethers.formatUnits(tx.value, 18),
-    blockTimestamp: Number(tx.timeStamp) * 1000,
-    blockNumber: Number(tx.blockNumber),
-    tokenSymbol: tx.tokenSymbol,
-    rawData: tx,
-  }));
+  return results;
 }
 
 /** 发送 BEP20 USDT 提现（热钱包签名） */
