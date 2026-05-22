@@ -9,11 +9,22 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: '#f0f9ff',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
+          50: '#fefce8',
+          100: '#fef9c3',
+          200: '#fef08a',
+          300: '#fde047',
+          400: '#facc15',
+          500: '#eab308', // Trophy Gold
+          600: '#ca8a04',
+          700: '#a16207',
         },
+        pitch: {
+          900: '#061c13',
+          950: '#020b07',
+        }
+      },
+      fontFamily: {
+        sans: ['Outfit', 'Inter', 'sans-serif'],
       },
     },
   },

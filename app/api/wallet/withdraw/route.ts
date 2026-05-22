@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
 import { ok, err, handleError } from '@/lib/api';
 import { add, gte, sub, toStr } from '@/lib/money';
-import { isValidTronAddress } from '@/lib/tron';
+import { isValidBscAddress } from '@/lib/bsc';
 
 const schema = z.object({
   toAddress: z.string(),
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const user = await requireUser();
     const { toAddress, amount } = schema.parse(await req.json());
 
-    if (!(await isValidTronAddress(toAddress))) return err('提现地址不合法');
+    if (!(await isValidBscAddress(toAddress))) return err('BSC 提现地址不合法');
 
     const minWd = process.env.MIN_WITHDRAW_USDT || '10';
     if (!gte(amount, minWd)) return err(`最低提现 ${minWd} USDT`);

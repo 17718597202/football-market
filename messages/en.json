@@ -1,0 +1,94 @@
+{
+  "nav": {
+    "title": "🏆 2026 World Cup",
+    "markets": "Markets",
+    "myBets": "My Bets",
+    "wallet": "Wallet",
+    "admin": "Admin",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout"
+  },
+  "home": {
+    "heroTitle": "🏆 2026 World Cup Prediction",
+    "heroSub": "Predict the greatest football matches on earth. Pari-mutuel mode settles automatically and splits the golden pool based on winning stakes.",
+    "browseMarkets": "Enter the Arena",
+    "activeMarkets": "Live Fixtures",
+    "totalBets": "Total Wagers",
+    "registeredUsers": "Global Players",
+    "upcomingMatches": "Upcoming Matches",
+    "noUpcoming": "No Open Matches",
+    "pool": "Prize Pool"
+  },
+  "market": {
+    "title": "Markets",
+    "tabs": {
+      "OPEN": "Live",
+      "LOCKED": "Locked",
+      "RESOLVED": "Settled"
+    },
+    "allComps": "All Matches",
+    "empty": "No {status} markets for {comp}",
+    "lockAt": "Lock",
+    "winner": "Winner",
+    "types": {
+      "RESULT_1X2": "Full Time 1X2",
+      "CORRECT_SCORE": "Correct Score"
+    }
+  },
+  "wallet": {
+    "title": "Wallet",
+    "balance": "Available Balance",
+    "frozen": "Frozen for Withdraw",
+    "depositTitle": "Deposit (BEP20 USDT)",
+    "depositDesc1": "1. Bind your BEP20(BSC) sending address to your account (Only deposits from this address will be credited automatically)",
+    "depositDesc2": "2. Transfer USDT to the platform receiving address",
+    "depositDesc3": "3. Automatically credited after blockchain confirmation (typically 1-3 minutes)",
+    "myBscAddress": "My BSC Wallet Address",
+    "placeholderBsc": "EVM Address starting with 0x",
+    "bind": "Bind",
+    "platformAddress": "Platform Receiving Address (Copy Exactly)",
+    "depositNote": "Note: Must be BEP20-USDT (BSC Network); ERC20/TRC20 will NOT be credited and cannot be recovered",
+    "withdrawTitle": "Withdraw",
+    "withdrawAddress": "Receiving Address",
+    "withdrawAmount": "Amount (Min {min} U)",
+    "withdrawSubmit": "Request Withdraw",
+    "withdrawNote": "Withdrawals require admin approval before on-chain transfer",
+    "withdrawHistory": "Withdrawal History",
+    "recentTx": "Recent Transactions",
+    "noData": "No data",
+    "status": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "SENT": "Sent",
+      "REJECTED": "Rejected",
+      "FAILED": "Failed"
+    },
+    "txType": {
+      "DEPOSIT": "Deposit",
+      "WITHDRAW_LOCK": "Withdraw Lock",
+      "WITHDRAW_RELEASE": "Withdraw Complete",
+      "WITHDRAW_REFUND": "Withdraw Refund",
+      "BET_PLACE": "Bet Placed",
+      "BET_PAYOUT": "Bet Payout",
+      "BET_REFUND": "Bet Refund",
+      "ADJUSTMENT": "Adjustment"
+    }
+  },
+  "admin": {
+    "users": "User Management",
+    "register": "Joined",
+    "frozen": "Frozen",
+    "bets": "Bets",
+    "deposits": "Deps"
+  },
+  "auth": {
+    "login": "Login",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Submit",
+    "noAccount": "No account? Register",
+    "register": "Register",
+    "hasAccount": "Already have an account? Login"
+  }
+}

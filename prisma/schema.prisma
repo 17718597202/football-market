@@ -23,8 +23,8 @@ model User {
   // USDT 余额（字符串存储 Decimal，避免精度问题）
   balanceUsdt   String   @default("0")
   frozenUsdt    String   @default("0")
-  // 用户绑定的 TRC20 充值来源地址（充值匹配用）
-  tronAddress   String?  @unique
+  // 用户绑定的 BSC (BEP20) 充值来源地址（充值匹配用）
+  bscAddress    String?  @unique
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -215,8 +215,8 @@ model Setting {
 // 扫块进度
 // =========================================================
 model ScanCursor {
-  id            String   @id @default("trc20_usdt")
-  lastTimestamp BigInt   @default(0)
+  id            String   @id @default("bep20_usdt")
+  lastBlockNumber BigInt   @default(0)
   lastTxHash    String?
   updatedAt     DateTime @updatedAt
 }

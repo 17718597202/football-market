@@ -103,7 +103,7 @@ async function run() {
                 matchId: match.id,
                 type: 'RESULT_1X2',
                 title: `${match.homeTeam} vs ${match.awayTeam} - 全场胜平负`,
-                lockAt: match.kickoffAt,
+                lockAt: new Date(match.kickoffAt.getTime() - 5 * 60 * 1000),
                 rakeBps: Number(process.env.PLATFORM_RAKE_BPS || 300),
                 options: {
                   create: [
@@ -153,7 +153,7 @@ async function run() {
                 matchId: match.id,
                 type: 'CORRECT_SCORE',
                 title: `${match.homeTeam} vs ${match.awayTeam} - 全场比分波胆`,
-                lockAt: match.kickoffAt,
+                lockAt: new Date(match.kickoffAt.getTime() - 5 * 60 * 1000),
                 rakeBps: Number(process.env.PLATFORM_RAKE_BPS || 300),
                 options: {
                   create: correctScoreOptions,

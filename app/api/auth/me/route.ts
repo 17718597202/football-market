@@ -10,6 +10,6 @@ export async function GET() {
     role: user.role,
     balanceUsdt: user.balanceUsdt,
     frozenUsdt: user.frozenUsdt,
-    tronAddress: user.tronAddress,
+    bscAddress: user.bscAddress,
   });
 }

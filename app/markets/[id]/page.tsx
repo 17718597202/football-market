@@ -1,7 +1,10 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { getDictionary, getLocale } from '@/lib/i18n';
+import { getLocalizedTeam, getLocalizedComp } from '@/lib/translation';
 import BetPanel from './BetPanel';
+import LocalTime from '@/components/LocalTime';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +29,8 @@ export default async function MarketDetailPage({
   if (!market) notFound();
 
   const user = await getCurrentUser();
+  const dict = getDictionary();
+  const locale = getLocale();
   const myBets = user
     ? await prisma.bet.findMany({
         where: { marketId: market.id, userId: user.id },
@@ -37,11 +42,24 @@ export default async function MarketDetailPage({
   const totalStake = Number(market.totalStake);
   const rakeBps = market.rakeBps;
 
+  const locHome = getLocalizedTeam(market.match.homeTeam, locale);
+  const locAway = getLocalizedTeam(market.match.awayTeam, locale);
+  const displayTitle = `${locHome} vs ${locAway} - ${dict.market.types[market.type as keyof typeof dict.market.types] || market.type}`;
+
+  const getOptionLabel = (option: any) => {
+    if (locale === 'zh') return option.label;
+    if (option.key === 'HOME') return `${locHome} Win`;
+    if (option.key === 'AWAY') return `${locAway} Win`;
+    if (option.key === 'DRAW') return 'Draw';
+    if (option.key === 'OTHER') return 'Other Score';
+    return option.label;
+  };
+
   return (
     <div className="space-y-6">
       <div className="card">
-        <div className="text-xs opacity-60">{market.match.competition}</div>
-        <h1 className="text-xl font-bold mt-1">{market.title}</h1>
+        <div className="text-xs opacity-60">{getLocalizedComp(market.match.competition, locale)}</div>
+        <h1 className="text-xl font-bold mt-1">{displayTitle}</h1>
         {market.description && (
           <p className="text-sm opacity-70 mt-2">{market.description}</p>
         )}
@@ -57,7 +75,7 @@ export default async function MarketDetailPage({
           </div>
           <div>
             <div className="opacity-60 text-xs">锁单时间</div>
-            <div className="mt-0.5">{new Date(market.lockAt).toLocaleString('zh-CN')}</div>
+            <div className="mt-0.5"><LocalTime date={market.lockAt} locale={locale} /></div>
           </div>
           <div>
             <div className="opacity-60 text-xs">奖池</div>
@@ -97,22 +115,22 @@ export default async function MarketDetailPage({
         </div>
       )}
 
-      <BetPanel
-        market={{
-          id: market.id,
-          title: market.title,
-          status: market.status,
-          totalStake: market.totalStake,
-          rakeBps: market.rakeBps,
-          winningKey: market.winningKey,
-          options: market.options.map((o) => ({
-            id: o.id,
-            key: o.key,
-            label: o.label,
-            totalStake: o.totalStake,
-            betCount: o.betCount,
-          })),
-        }}
+        <BetPanel
+          market={{
+            id: market.id,
+            title: displayTitle,
+            status: market.status,
+            totalStake: market.totalStake,
+            rakeBps: market.rakeBps,
+            winningKey: market.winningKey,
+            options: market.options.map((o) => ({
+              id: o.id,
+              key: o.key,
+              label: getOptionLabel(o),
+              totalStake: o.totalStake,
+              betCount: o.betCount,
+            })),
+          }}
         loggedIn={!!user}
         balance={user?.balanceUsdt || '0'}
       />
@@ -124,9 +142,9 @@ export default async function MarketDetailPage({
             {myBets.map((b) => (
               <div key={b.id} className="card flex justify-between items-center">
                 <div>
-                  <div className="font-medium">{b.option.label}</div>
+                  <div className="font-medium">{getOptionLabel(b.option)}</div>
                   <div className="text-xs opacity-60 mt-1">
-                    {new Date(b.createdAt).toLocaleString('zh-CN')}
+                    <LocalTime date={b.createdAt} locale={locale} />
                   </div>
                 </div>
                 <div className="text-right text-sm">

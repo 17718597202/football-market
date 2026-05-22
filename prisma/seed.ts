@@ -105,9 +105,9 @@ async function main() {
 
   // ============ 4. 初始化扫块游标 ============
   await prisma.scanCursor.upsert({
-    where: { id: 'trc20_usdt' },
+    where: { id: 'bep20_usdt' },
     update: {},
-    create: { id: 'trc20_usdt', lastTimestamp: BigInt(0) },
+    create: { id: 'bep20_usdt', lastBlockNumber: BigInt(0) },
   });
 
   console.log('\n🎉 种子数据初始化完成！');

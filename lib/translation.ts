@@ -10,22 +10,29 @@ const TEAM_MAP: Record<string, string> = {
   'Arsenal FC': '阿森纳',
   'Manchester City': '曼城',
   'Manchester City FC': '曼城',
+  'Man City': '曼城',
   'Manchester United': '曼联',
   'Manchester United FC': '曼联',
+  'Man United': '曼联',
   'Liverpool': '利物浦',
   'Liverpool FC': '利物浦',
   'Tottenham Hotspur': '热刺',
   'Tottenham Hotspur FC': '热刺',
+  'Tottenham': '热刺',
   'Aston Villa': '阿斯顿维拉',
   'Aston Villa FC': '阿斯顿维拉',
   'Newcastle United': '纽卡斯尔联',
   'Newcastle United FC': '纽卡斯尔联',
+  'Newcastle': '纽卡斯尔联',
   'West Ham United': '西汉姆联',
   'West Ham United FC': '西汉姆联',
+  'West Ham': '西汉姆联',
   'Brighton & Hove Albion': '布莱顿',
   'Brighton & Hove Albion FC': '布莱顿',
+  'Brighton Hove': '布莱顿',
   'Wolverhampton Wanderers': '狼队',
   'Wolverhampton Wanderers FC': '狼队',
+  'Wolverhampton': '狼队',
   'Crystal Palace': '水晶宫',
   'Crystal Palace FC': '水晶宫',
   'Everton': '埃弗顿',
@@ -38,6 +45,7 @@ const TEAM_MAP: Record<string, string> = {
   'Fulham FC': '富勒姆',
   'Nottingham Forest': '诺丁汉森林',
   'Nottingham Forest FC': '诺丁汉森林',
+  'Nottingham': '诺丁汉森林',
   'Leicester City': '莱斯特城',
   'Leicester City FC': '莱斯特城',
   'Ipswich Town': '伊普斯维奇',
@@ -50,6 +58,11 @@ const TEAM_MAP: Record<string, string> = {
   'Luton Town FC': '卢顿',
   'Burnley': '伯恩利',
   'Burnley FC': '伯恩利',
+  'Sunderland': '桑德兰',
+  'Sunderland AFC': '桑德兰',
+  'Leeds United': '利兹联',
+  'Leeds United FC': '利兹联',
+  'Leeds': '利兹联',
 
   // ================= 西甲 (La Liga) =================
   'Real Madrid': '皇家马德里',
@@ -130,4 +143,28 @@ export function translateCompetition(name: string): string {
   if (!name) return name;
   const cleanName = name.trim();
   return COMPETITION_MAP[cleanName] || name;
+}
+
+const REVERSE_TEAM_MAP: Record<string, string> = {};
+for (const [en, zh] of Object.entries(TEAM_MAP)) {
+  if (!REVERSE_TEAM_MAP[zh] || !en.includes(' FC')) {
+    REVERSE_TEAM_MAP[zh] = en;
+  }
+}
+
+const REVERSE_COMP_MAP: Record<string, string> = {};
+for (const [en, zh] of Object.entries(COMPETITION_MAP)) {
+  if (!REVERSE_COMP_MAP[zh]) {
+    REVERSE_COMP_MAP[zh] = en;
+  }
+}
+
+export function getLocalizedTeam(name: string, locale: 'zh' | 'en'): string {
+  if (locale === 'zh' || !name) return name;
+  return REVERSE_TEAM_MAP[name] || name;
+}
+
+export function getLocalizedComp(name: string, locale: 'zh' | 'en'): string {
+  if (locale === 'zh' || !name) return name;
+  return REVERSE_COMP_MAP[name] || name;
 }

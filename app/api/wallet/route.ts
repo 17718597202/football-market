@@ -18,7 +18,7 @@ export async function GET() {
     return ok({
       balance: user.balanceUsdt,
       frozen: user.frozenUsdt,
-      tronAddress: user.tronAddress,
+      bscAddress: user.bscAddress,
       hotWalletAddress: process.env.HOT_WALLET_ADDRESS || '',
       transactions: txs,
       pendingWithdrawals,

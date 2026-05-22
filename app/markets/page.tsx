@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
+import { getDictionary, getLocale } from '@/lib/i18n';
+import { getLocalizedTeam, getLocalizedComp } from '@/lib/translation';
+import LocalTime from '@/components/LocalTime';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +11,8 @@ export default async function MarketsPage({
 }: {
   searchParams: { status?: string; comp?: string };
 }) {
+  const dict = getDictionary();
+  const locale = getLocale();
   const status = searchParams.status || 'OPEN';
   const currentComp = searchParams.comp || 'ALL';
 
@@ -19,28 +24,38 @@ export default async function MarketsPage({
   const compList = comps.map((c) => c.competition).filter(Boolean);
 
   // 2. 组装过滤条件
-  const where: any = { status };
+  const matchWhere: any = {
+    markets: { some: { status: status } }
+  };
+  if (status === 'OPEN') {
+    matchWhere.markets.some.lockAt = { gt: new Date() };
+  }
   if (currentComp !== 'ALL') {
-    where.match = { competition: currentComp };
+    matchWhere.competition = currentComp;
   }
 
-  const markets = await prisma.market.findMany({
-    where,
-    include: { match: true, options: true },
-    orderBy: { lockAt: 'asc' },
-    take: 100,
+  const matches = await prisma.match.findMany({
+    where: matchWhere,
+    include: {
+      markets: {
+        where: status === 'OPEN' ? { status, lockAt: { gt: new Date() } } : { status },
+        include: { options: true },
+      }
+    },
+    orderBy: { kickoffAt: 'asc' },
+    take: 50,
   });
 
   const tabs = [
-    { key: 'OPEN', label: '进行中' },
-    { key: 'LOCKED', label: '已锁定' },
-    { key: 'RESOLVED', label: '已结算' },
+    { key: 'OPEN', label: dict.market.tabs.OPEN },
+    { key: 'LOCKED', label: dict.market.tabs.LOCKED },
+    { key: 'RESOLVED', label: dict.market.tabs.RESOLVED },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">市场</h1>
+        <h1 className="text-2xl font-bold">{dict.market.title}</h1>
         <div className="flex gap-2">
           {tabs.map((t) => (
             <Link
@@ -49,7 +64,7 @@ export default async function MarketsPage({
               className={
                 'no-underline px-3 py-1 rounded-md text-sm ' +
                 (status === t.key
-                  ? 'bg-[var(--brand)] text-white'
+                  ? 'bg-[var(--brand)] text-black font-bold'
                   : 'border border-[var(--border)] opacity-70')
               }
             >
@@ -66,11 +81,11 @@ export default async function MarketsPage({
           className={
             'no-underline px-3 py-1 rounded-full text-xs font-medium transition ' +
             (currentComp === 'ALL'
-              ? 'bg-[var(--brand)] text-white font-bold'
+              ? 'bg-[var(--brand)] text-black font-bold'
               : 'border border-[var(--border)] opacity-75 hover:opacity-100')
           }
         >
-          全部赛事
+          {dict.market.allComps}
         </Link>
         {compList.map((c) => (
           <Link
@@ -79,7 +94,7 @@ export default async function MarketsPage({
             className={
               'no-underline px-3 py-1 rounded-full text-xs font-medium transition whitespace-nowrap ' +
               (currentComp === c
-                ? 'bg-[var(--brand)] text-white font-bold'
+                ? 'bg-[var(--brand)] text-black font-bold'
                 : 'border border-[var(--border)] opacity-75 hover:opacity-100')
             }
           >
@@ -88,40 +103,53 @@ export default async function MarketsPage({
         ))}
       </div>
 
-      <div className="space-y-2">
-        {markets.length === 0 && (
+      <div className="space-y-4">
+        {matches.length === 0 && (
           <div className="card text-center opacity-60">
-            暂无 {currentComp !== 'ALL' ? `[${currentComp}] ` : ''}
-            {tabs.find((t) => t.key === status)?.label}市场
+            {dict.market.empty.replace('{status}', tabs.find((t) => t.key === status)?.label || status).replace('{comp}', currentComp === 'ALL' ? '' : `[${currentComp}]`)}
           </div>
         )}
-        {markets.map((m) => (
-          <Link
-            key={m.id}
-            href={`/markets/${m.id}`}
-            className="card flex items-center justify-between no-underline hover:border-brand-500"
-          >
-            <div className="flex-1">
-              <div className="text-xs opacity-60">
-                {m.match.competition} {m.type === 'CORRECT_SCORE' ? '· 比分波胆' : '· 胜平负'}
-              </div>
-              <div className="font-medium mt-0.5">{m.title}</div>
-              <div className="text-xs opacity-60 mt-1">
-                锁单 {new Date(m.lockAt).toLocaleString('zh-CN')}
-              </div>
-            </div>
-            <div className="text-right text-sm">
-              <div className="opacity-60">奖池</div>
-              <div className="font-bold text-base">
-                {Number(m.totalStake).toFixed(2)} U
-              </div>
-              {m.status === 'RESOLVED' && m.winningKey && (
-                <div className="tag tag-green mt-1">
-                  胜方 {m.options.find((o) => o.key === m.winningKey)?.label || m.winningKey}
+        {matches.map((match) => (
+          <div key={match.id} className="card group hover:border-[#eab308] transition-colors p-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4">
+              <div>
+                <div className="text-sm opacity-60 mb-1.5 flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-md bg-[rgba(255,255,255,0.05)] text-[#fef08a] font-medium">{getLocalizedComp(match.competition, locale)}</span>
+                  <span>·</span>
+                  <LocalTime date={match.kickoffAt} locale={locale} />
                 </div>
-              )}
+                <div className="font-extrabold text-2xl group-hover:text-[#fef08a] transition-colors">
+                  {getLocalizedTeam(match.homeTeam, locale)} <span className="opacity-50 font-medium text-lg mx-2">vs</span> {getLocalizedTeam(match.awayTeam, locale)}
+                </div>
+              </div>
             </div>
-          </Link>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-[var(--border)]">
+              {match.markets.map((m) => (
+                <Link
+                  key={m.id}
+                  href={`/markets/${m.id}`}
+                  className="flex items-center justify-between p-3 rounded-xl bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(234,179,8,0.1)] border border-transparent hover:border-[rgba(234,179,8,0.3)] transition-all no-underline group/market"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium text-[var(--text)] group-hover/market:text-[#fef08a] transition-colors">
+                      {dict.market.types[m.type as keyof typeof dict.market.types] || m.type}
+                    </span>
+                    {m.status === 'RESOLVED' && m.winningKey && (
+                      <span className="text-[10px] text-[#10b981] mt-1 font-bold">
+                        {dict.market.winner}: {m.options.find((o) => o.key === m.winningKey)?.label || m.winningKey}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] opacity-60 uppercase tracking-wider leading-none mb-1">{dict.home.pool}</div>
+                    <div className="font-bold text-[#10b981] leading-none">
+                      {Number(m.totalStake).toFixed(2)} U
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </div>
