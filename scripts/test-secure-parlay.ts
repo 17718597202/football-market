@@ -262,7 +262,7 @@ async function runTests() {
   console.log(`  结算派彩额: ${settledBet?.payout} U (预期: ${MAX_PARLAY_PAYOUT.toFixed(2)})`);
   console.log(`  交易流水记录 Remark: "${transaction?.remark}"`);
 
-  if (settledBet?.status === 'WON' && Number(settledBet.payout) === MAX_PARLAY_PAYOUT && transaction?.remark.includes('触发单单最高派彩上限封顶')) {
+  if (settledBet?.status === 'WON' && Number(settledBet.payout) === MAX_PARLAY_PAYOUT && transaction?.remark?.includes('触发单单最高派彩上限封顶')) {
     console.log('  ✓ 测试通过！整单最高派彩金额强行截断为 5,000 U，风控账目记录清晰。');
   } else {
     console.error('❌ 测试失败：最高派彩未被截断，或没有写入截断说明！');
