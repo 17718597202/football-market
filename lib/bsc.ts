@@ -74,6 +74,49 @@ export async function fetchBep20Transfers(
   return results;
 }
 
+/** 使用 getLogs 批量拉取指定区块范围内的 BEP20 USDT 充值记录 */
+export async function fetchBep20TransfersBatch(
+  toAddress: string,
+  fromBlock: number,
+  toBlock: number
+) {
+  const cfg = getBscConfig();
+  const provider = getProvider();
+
+  const transferTopic = ethers.id('Transfer(address,address,uint256)');
+  const recipientTopic = ethers.zeroPadValue(toAddress.toLowerCase(), 32);
+
+  const filter = {
+    address: cfg.usdtContract,
+    topics: [transferTopic, null, recipientTopic],
+    fromBlock: ethers.toBeHex(fromBlock),
+    toBlock: ethers.toBeHex(toBlock),
+  };
+
+  const logs = await provider.getLogs(filter);
+  const results = [];
+
+  for (const log of logs) {
+    // 解析 from 地址：从 topic[1] 获取并去除零填充
+    const fromAddress = ethers.getAddress('0x' + log.topics[1].substring(26));
+    const amountHex = log.data;
+    // USDT BEP20 精度是 18 位（BSC主网）
+    const amountUsdt = ethers.formatUnits(amountHex, 18);
+
+    results.push({
+      txHash: log.transactionHash,
+      from: fromAddress,
+      to: toAddress,
+      amountUsdt,
+      blockNumber: Number(log.blockNumber),
+      tokenSymbol: 'USDT',
+      rawData: { hash: log.transactionHash, topics: log.topics, data: log.data },
+    });
+  }
+
+  return results;
+}
+
 /** 发送 BEP20 USDT 提现（热钱包签名） */
 export async function sendBep20(
   toAddress: string,

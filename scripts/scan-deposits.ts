@@ -14,11 +14,11 @@ import { fetchBep20Transfers, getBscConfig, getCurrentBlock } from '../lib/bsc';
 
 const INTERVAL_MS = Number(process.env.SCAN_INTERVAL_SECONDS || 30) * 1000;
 
-async function tick() {
+async function tick(): Promise<boolean> {
   const cfg = getBscConfig();
   if (!cfg.hotWallet) {
     console.warn('[scan] HOT_WALLET_ADDRESS 未配置，跳过');
-    return;
+    return true;
   }
 
   let cursor = await prisma.scanCursor.findUnique({ where: { id: 'bep20_usdt' } });
@@ -34,14 +34,15 @@ async function tick() {
   const currentBlock = await getCurrentBlock();
   
   if (minBlock >= currentBlock) {
-    return; // 没有新区块
+    return true; // 没有新区块，已追上
   }
 
-  // 每次 tick 最多扫 20 个区块（约 1 分钟的量），防止落后太多时一次性发几千个请求被节点拉黑
-  const maxBlock = Math.min(minBlock + 20, currentBlock);
+  // 每次并发扫 5 个区块，防止免费节点并发限制而卡死
+  const step = Math.min(5, currentBlock - minBlock);
+  const maxBlock = minBlock + step;
 
   if (currentBlock - minBlock > 100) {
-    console.log(`[scan] ⚠️ 严重落后！当前区块 ${currentBlock}，游标 ${minBlock}，正在加速追赶...`);
+    console.log(`[scan] ⚠️ 严重落后！当前区块 ${currentBlock}，游标 ${minBlock}，正在加速追赶... (当前并发批次: ${minBlock + 1} - ${maxBlock})`);
   }
 
   let allTransfers: any[] = [];
@@ -54,7 +55,7 @@ async function tick() {
     allTransfers = results.flat();
   } catch (e: any) {
     console.error('[scan] RPC 扫块错误:', e.message);
-    return;
+    return false;
   }
 
   for (const t of allTransfers) {
@@ -121,17 +122,24 @@ async function tick() {
     where: { id: 'bep20_usdt' },
     data: { lastBlockNumber: BigInt(maxBlock) },
   });
+
+  return maxBlock >= currentBlock;
 }
 
 async function main() {
   console.log('[scan] BEP20 USDT 扫块器启动，间隔', INTERVAL_MS / 1000, '秒');
   while (true) {
     try {
-      await tick();
+      const caughtUp = await tick();
+      if (caughtUp) {
+        await new Promise((r) => setTimeout(r, INTERVAL_MS));
+      } else {
+        await new Promise((r) => setTimeout(r, 100)); // 快速追赶时仅等待 100 毫秒进入下一轮
+      }
     } catch (e) {
       console.error('[scan] tick 出错:', e);
+      await new Promise((r) => setTimeout(r, 5000)); // 出错时等待 5 秒防止死循环打爆 RPC
     }
-    await new Promise((r) => setTimeout(r, INTERVAL_MS));
   }
 }
 
