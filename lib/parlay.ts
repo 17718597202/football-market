@@ -5,6 +5,14 @@ import { prisma } from './db';
 import { add, sub, mul, d, toStr } from './money';
 import Decimal from 'decimal.js';
 
+// =========================================================
+// 串关全局风控阈值配置
+// =========================================================
+export const MIN_PARLAY_LIQUIDITY = Number(process.env.MIN_PARLAY_LIQUIDITY || '500'); // 最低准入单场池额 (500 USDT)
+export const MAX_LEG_ODDS = Number(process.env.MAX_LEG_ODDS || '10.00'); // 单场赔率上限 (10.00x)
+export const MAX_PARLAY_ODDS = Number(process.env.MAX_PARLAY_ODDS || '500.00'); // 串单总赔率上限 (500.00x)
+export const MAX_PARLAY_PAYOUT = Number(process.env.MAX_PARLAY_PAYOUT || '5000.00'); // 单单最高派彩封顶 (5,000 USDT)
+
 /**
  * 实时计算某单场选项在当前彩池中的估算固定赔率
  * 规则：Odds = (totalStake * (1 - rakeBps/10000)) / optionStake
@@ -33,8 +41,11 @@ export async function calculateOptionOdds(optionId: string): Promise<string> {
   const payoutPool = mTotal.times(rakeFactor);
   const rawOdds = payoutPool.div(oStake);
 
-  // 限制赔率下限不低于 1.01 U，防止彩池比例极度偏斜导致赔率小于 1
-  return rawOdds.lt(1.01) ? '1.01' : rawOdds.toFixed(2);
+  // 限制最低赔率不低于 1.01，且最高赔率不超过 MAX_LEG_ODDS 限制
+  if (rawOdds.lt(1.01)) return '1.01';
+  if (rawOdds.gt(MAX_LEG_ODDS)) return MAX_LEG_ODDS.toFixed(2);
+  
+  return rawOdds.toFixed(2);
 }
 
 /**
@@ -81,11 +92,16 @@ export async function placeParlayBet(
       throw new Error('串关投注仅允许跨不同比赛的选项，禁止对同一场比赛的多个不同玩法进行串关');
     }
 
-    // 3. 验证是否有已经开赛的赛程
+    // 3. 验证是否有已经开赛的赛程，且验证最低资金池要求
     const now = new Date();
     for (const m of markets) {
       if (m.status !== 'OPEN' || m.lockAt <= now) {
         throw new Error(`比赛已开赛锁定，无法进行投注: ${m.title}`);
+      }
+      
+      // 准入门槛风控：校验池子总流动性是否满足最低串关条件
+      if (d(m.totalStake).lt(MIN_PARLAY_LIQUIDITY)) {
+        throw new Error(`比赛 [${m.title}] 玩法资金池 (${m.totalStake} USDT) 低于最低串关门槛 (${MIN_PARLAY_LIQUIDITY} USDT)`);
       }
     }
 
@@ -109,7 +125,8 @@ export async function placeParlayBet(
       if (mTotal.gt(0) && oStake.gt(0)) {
         const payout = mTotal.times(rakeFactor);
         const calc = payout.div(oStake);
-        optionOdds = calc.lt(1.01) ? d(1.01) : calc;
+        const cappedOdds = calc.gt(MAX_LEG_ODDS) ? d(MAX_LEG_ODDS) : calc;
+        optionOdds = cappedOdds.lt(1.01) ? d(1.01) : cappedOdds;
       }
 
       totalOdds = totalOdds.times(optionOdds);
@@ -120,6 +137,10 @@ export async function placeParlayBet(
       });
     }
 
+    // 整单总赔率封顶限制
+    if (totalOdds.gt(MAX_PARLAY_ODDS)) {
+      totalOdds = d(MAX_PARLAY_ODDS);
+    }
     const finalTotalOdds = totalOdds.toFixed(2);
 
     // 5. 扣减用户可用余额
@@ -241,7 +262,18 @@ export async function settleParlayItems(
 
       // 将最终的总赔率取 2 位小数四舍五入，确保派彩本金计算与页面显示的赔率绝对一致
       const roundedMultiplier = finalMultiplier.toDP(2, Decimal.ROUND_HALF_UP);
-      const finalPayout = roundedMultiplier.times(new Decimal(parentBet.amount)).toFixed(2);
+      
+      let rawPayout = roundedMultiplier.times(new Decimal(parentBet.amount));
+      let isCapped = false;
+      
+      // 单笔最高派彩风控限额
+      const limitPayout = new Decimal(MAX_PARLAY_PAYOUT);
+      if (rawPayout.gt(limitPayout)) {
+        rawPayout = limitPayout;
+        isCapped = true;
+      }
+      
+      const finalPayout = rawPayout.toFixed(2);
 
       // 为中奖用户分发余额并修改订单状态
       const user = await tx.user.findUnique({ where: { id: parentBet.userId } });
@@ -261,6 +293,10 @@ export async function settleParlayItems(
           },
         });
 
+        const remarkNote = isCapped
+          ? `串关投注获胜派彩 (${parentBet.items.length}串1), 最终赔率 ${finalMultiplier.toFixed(2)} (触发单单最高派彩上限封顶，原应收 ${roundedMultiplier.times(new Decimal(parentBet.amount)).toFixed(2)} U)`
+          : `串关投注获胜派彩 (${parentBet.items.length}串1), 最终赔率 ${finalMultiplier.toFixed(2)}`;
+
         // 生成派彩流水记录
         await tx.transaction.create({
           data: {
@@ -270,7 +306,7 @@ export async function settleParlayItems(
             balanceAfter: newBalance,
             refType: 'BET',
             refId: parentId,
-            remark: `串关投注获胜派彩 (${parentBet.items.length}串1), 最终赔率 ${finalMultiplier.toFixed(2)}`,
+            remark: remarkNote,
           },
         });
 

@@ -1,8 +1,7 @@
-/**
- * 智能彩池流动性自动注水引擎
- * (Automated Pari-mutuel Liquidity & Odds Generator)
- */
 import { prisma } from './db';
+import { add, sub, toStr } from './money';
+
+const SYSTEM_BOT_USERNAME = 'system_liquidity_bot';
 
 // 俱乐部实力评分字典 (用于模拟生成极度真实的足球赔率和流动性)
 const TEAM_STRENGTHS: Record<string, number> = {
@@ -34,10 +33,27 @@ function getStrength(teamName: string): number {
 }
 
 /**
- * 为特定的预测玩法市场注入仿真水子（流动性种子资金）
+ * 为特定的预测玩法市场注入仿真水子（使用系统机器人账号进行对账一致性下注）
  * @param marketId 预测玩法市场 ID
  */
 export async function injectMarketLiquidity(marketId: string) {
+  // 1. 确保特权注水机器人账户存在
+  let bot = await prisma.user.findUnique({
+    where: { username: SYSTEM_BOT_USERNAME }
+  });
+
+  if (!bot) {
+    bot = await prisma.user.create({
+      data: {
+        username: SYSTEM_BOT_USERNAME,
+        passwordHash: 'SYSTEM_BOT_NO_PASSWORD',
+        role: 'USER',
+        balanceUsdt: '10000000.00', // 给予充足的注水额度
+        frozenUsdt: '0',
+      }
+    });
+  }
+
   const market = await prisma.market.findUnique({
     where: { id: marketId },
     include: { match: true, options: true },
@@ -64,7 +80,7 @@ export async function injectMarketLiquidity(marketId: string) {
 
   // 设定该彩池随机的流动性底盘资金（2500 U 到 7500 U 之间）
   const targetTotal = Math.floor(Math.random() * 5000) + 2500;
-  let distributedStake = 0;
+  const optionsBets: { optionId: string; amount: string; label: string }[] = [];
 
   if (market.type === 'RESULT_1X2') {
     const ratios: Record<string, number> = {
@@ -82,23 +98,15 @@ export async function injectMarketLiquidity(marketId: string) {
     ratios.DRAW /= sum;
     ratios.AWAY /= sum;
 
-    const updatePromises = [];
     for (const opt of market.options) {
       const share = ratios[opt.key] || 0.33;
       const stake = Math.floor(targetTotal * share);
-      distributedStake += stake;
-
-      updatePromises.push(
-        prisma.marketOption.update({
-          where: { id: opt.id },
-          data: {
-            totalStake: String(stake),
-            betCount: Math.floor(stake / (15 + Math.random() * 30)) + 3,
-          },
-        })
-      );
+      optionsBets.push({
+        optionId: opt.id,
+        amount: String(stake),
+        label: opt.label,
+      });
     }
-    await Promise.all(updatePromises);
   } else if (market.type === 'CORRECT_SCORE') {
     // 依交战实力差调整波胆分布
     const strengthDiff = homeStr - awayStr;
@@ -122,13 +130,10 @@ export async function injectMarketLiquidity(marketId: string) {
       if (scoreKey !== 'OTHER') {
         const [h, a] = scoreKey.split(':').map(Number);
         if (h > a) {
-          // 主胜比分：如果主队更强，放大该比分投注占比
           factor = strengthDiff > 0 ? (1 + strengthDiff / 25) : (1 + strengthDiff / 50);
         } else if (h < a) {
-          // 客胜比分：如果客队更强，放大该比分投注占比
           factor = strengthDiff < 0 ? (1 - strengthDiff / 25) : (1 - strengthDiff / 50);
         } else {
-          // 平局比分：两队实力越接近，平局越易发生；实力差越悬殊，平局概率越小
           factor = Math.max(1 - Math.abs(strengthDiff) / 80, 0.2);
         }
       }
@@ -139,30 +144,87 @@ export async function injectMarketLiquidity(marketId: string) {
       sum += adjustedRatios[scoreKey];
     }
 
-    const updatePromises = [];
     for (const opt of market.options) {
       const share = (adjustedRatios[opt.key] || 0.01) / sum;
       const stake = Math.max(Math.floor(targetTotal * share), 10); // 兜底每个选项 10 U 流动性
-      distributedStake += stake;
-
-      updatePromises.push(
-        prisma.marketOption.update({
-          where: { id: opt.id },
-          data: {
-            totalStake: String(stake),
-            betCount: Math.floor(stake / (12 + Math.random() * 24)) + 1,
-          },
-        })
-      );
+      optionsBets.push({
+        optionId: opt.id,
+        amount: String(stake),
+        label: opt.label,
+      });
     }
-    await Promise.all(updatePromises);
   }
 
-  // 写入市场表总池额
-  await prisma.market.update({
-    where: { id: marketId },
-    data: { totalStake: String(distributedStake) },
-  });
+  // 2. 在一个标准的 Prisma 事务里执行机器人下注，确保资金明细 100% 对账一致
+  await prisma.$transaction(async (tx) => {
+    // 重新获取机器人，确保最新的 balance
+    const u = await tx.user.findUnique({ where: { id: bot.id } });
+    if (!u) throw new Error('System bot account missing in transaction');
 
-  console.log(`[liquidity] 自动为彩池 ${market.title} 自动注水 ${distributedStake} U，生成科学 odds`);
+    let currentBotBalance = u.balanceUsdt;
+    let distributedStake = 0;
+
+    for (const b of optionsBets) {
+      const stakeAmount = b.amount;
+      distributedStake += Number(stakeAmount);
+
+      // 扣除机器人虚拟账户余额
+      currentBotBalance = sub(currentBotBalance, stakeAmount);
+
+      // 创建 Bet 记录
+      const bet = await tx.bet.create({
+        data: {
+          userId: u.id,
+          marketId: market.id,
+          optionId: b.optionId,
+          amount: toStr(stakeAmount),
+          status: 'ACTIVE',
+        },
+      });
+
+      // 创建账户流水记录
+      await tx.transaction.create({
+        data: {
+          userId: u.id,
+          type: 'BET_PLACE',
+          amount: '-' + toStr(stakeAmount),
+          balanceAfter: currentBotBalance,
+          refType: 'BET',
+          refId: bet.id,
+          remark: `系统注水机器人模拟下注 - ${b.label}`,
+        },
+      });
+
+      // 更新 Option 的 Stake 和 Count
+      const option = await tx.marketOption.findUnique({ where: { id: b.optionId } });
+      if (option) {
+        await tx.marketOption.update({
+          where: { id: b.optionId },
+          data: {
+            totalStake: toStr(add(option.totalStake, stakeAmount)),
+            betCount: { increment: 1 },
+          },
+        });
+      }
+    }
+
+    // 更新机器人的最终余额
+    await tx.user.update({
+      where: { id: u.id },
+      data: { balanceUsdt: currentBotBalance },
+    });
+
+    // 更新 Market 的总 Stake
+    const m = await tx.market.findUnique({ where: { id: marketId } });
+    if (m) {
+      await tx.market.update({
+        where: { id: marketId },
+        data: {
+          totalStake: toStr(add(m.totalStake, String(distributedStake))),
+        },
+      });
+    }
+
+    console.log(`[liquidity] 机器人对账注入成功！彩池 ${market.title} 注入订单总量=${optionsBets.length} 总金额=${distributedStake} U`);
+  }, { timeout: 30000 });
 }
