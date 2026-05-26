@@ -49,7 +49,7 @@ export async function verifySession(token: string): Promise<JWTPayload | null> {
 export async function setSessionCookie(token: string) {
   cookies().set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // 允许在非 HTTPS (HTTP) 的服务器上正常测试登录
     sameSite: 'lax',
     path: '/',
     maxAge: SESSION_TTL,
