@@ -81,10 +81,6 @@ export default async function MarketDetailPage({
             <div className="opacity-60 text-xs">奖池</div>
             <div className="mt-0.5 font-bold">{totalStake.toFixed(2)} U</div>
           </div>
-          <div>
-            <div className="opacity-60 text-xs">平台抽水</div>
-            <div className="mt-0.5">{(rakeBps / 100).toFixed(2)}%</div>
-          </div>
           {market.match.status === 'FINISHED' && (
             <div>
               <div className="opacity-60 text-xs">比分</div>

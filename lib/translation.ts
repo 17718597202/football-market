@@ -113,6 +113,30 @@ const TEAM_MAP: Record<string, string> = {
   'Paris Saint-Germain': '巴黎圣日耳曼',
   'Paris Saint-Germain FC': '巴黎圣日耳曼',
   'PSG': '巴黎圣日耳曼',
+
+  // ================= 2026 世界杯夺冠预测 (World Cup) =================
+  '2026 World Cup': '2026年世界杯',
+  'Champion Prediction': '夺冠预测',
+  'Argentina': '阿根廷',
+  'France': '法国',
+  'Brazil': '巴西',
+  'England': '英格兰',
+  'Spain': '西班牙',
+  'Germany': '德国',
+  'Portugal': '葡萄牙',
+  'Netherlands': '荷兰',
+  'Italy': '意大利',
+  'Belgium': '比利时',
+  'Uruguay': '乌拉圭',
+  'Croatia': '克罗地亚',
+  'Japan': '日本',
+  'USA': '美国',
+  'Mexico': '墨西哥',
+  'Canada': '加拿大',
+  'Morocco': '摩洛哥',
+  'Saudi Arabia': '沙特阿拉伯',
+  'South Korea': '韩国',
+  'Other Teams': '其他队伍',
 };
 
 const COMPETITION_MAP: Record<string, string> = {
@@ -124,6 +148,7 @@ const COMPETITION_MAP: Record<string, string> = {
   'Ligue 1': '法甲',
   'UEFA Champions League': '欧冠',
   'Champions League': '欧冠',
+  'FIFA World Cup 2026': '2026世界杯',
 };
 
 export function translateTeam(name: string): string {

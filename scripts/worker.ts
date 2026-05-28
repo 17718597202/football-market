@@ -16,3 +16,4 @@ function start(name: string, args: string[]) {
 start('scan-deposits', ['scripts/scan-deposits.ts']);
 start('settle-cron', ['scripts/settle-cron.ts', '--loop']);
 start('sync-matches', ['scripts/sync-matches.ts', '--auto', '--loop']);
+start('inject-water', ['scripts/inject-water.ts']);

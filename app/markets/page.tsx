@@ -18,6 +18,9 @@ export default async function MarketsPage({
 
   // 1. 获取所有有赛事数据的联赛列表进行分类导航展示
   const comps = await prisma.match.findMany({
+    where: {
+      NOT: { externalId: 'worldcup2026_champion' }
+    },
     select: { competition: true },
     distinct: ['competition'],
   });
@@ -25,6 +28,7 @@ export default async function MarketsPage({
 
   // 2. 组装过滤条件
   const matchWhere: any = {
+    NOT: { externalId: 'worldcup2026_champion' },
     markets: { some: { status: status } }
   };
   if (status === 'OPEN') {

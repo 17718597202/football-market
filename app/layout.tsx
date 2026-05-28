@@ -37,6 +37,9 @@ export default async function RootLayout({
             <Link href="/markets" className="text-sm no-underline opacity-80 hover:opacity-100">
               {dict.nav.markets}
             </Link>
+            <Link href="/champion" className="text-sm no-underline opacity-90 hover:opacity-100 text-[#eab308] font-bold flex items-center gap-1">
+              🏆 {dict.nav.champion}
+            </Link>
             <Link href="/me/bets" className="text-sm no-underline opacity-80 hover:opacity-100">
               {dict.nav.myBets}
             </Link>

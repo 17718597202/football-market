@@ -51,6 +51,30 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* 2026 World Cup Champion Promo Banner */}
+      <section className="relative rounded-3xl overflow-hidden border border-[rgba(234,179,8,0.25)] bg-gradient-to-r from-[rgba(15,23,42,0.9)] via-[rgba(27,21,6,0.8)] to-[rgba(15,23,42,0.95)] p-8 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 group hover:border-[rgba(234,179,8,0.4)] transition-all duration-300">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-radial-gradient from-[rgba(234,179,8,0.1)] to-transparent pointer-events-none rounded-full blur-2xl"></div>
+        <div className="space-y-3 max-w-xl text-center md:text-left">
+          <span className="inline-flex px-2.5 py-0.5 rounded-full bg-[rgba(234,179,8,0.1)] text-[#eab308] text-[10px] font-extrabold tracking-widest uppercase border border-[rgba(234,179,8,0.2)]">
+            🔥 HOT TOURNAMENT
+          </span>
+          <h2 className="text-2xl font-black text-[#fef08a] tracking-tight group-hover:text-white transition-colors">
+            {locale === 'zh' ? '🏆 2026 世界杯夺冠大盘现已开启！' : '🏆 2026 World Cup Champion Market is LIVE!'}
+          </h2>
+          <p className="text-sm opacity-80 leading-relaxed">
+            {locale === 'zh'
+              ? '汇聚阿根廷、法国、巴西、英格兰等16大超级豪强！最纯粹的彩池博弈，返还赔率随资金流向实时变动，锁定属于你的夺冠神预测！'
+              : 'Assemble Argentina, France, Brazil, England and other giants! Transparent Pari-mutuel odds changing in real-time. Lock in your predictions now!'}
+          </p>
+        </div>
+        <Link
+          href="/champion"
+          className="btn bg-[#eab308] hover:bg-[#ca8a04] text-black font-extrabold px-6 py-3 rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.35)] no-underline whitespace-nowrap transform group-hover:scale-103 active:scale-97 transition duration-200"
+        >
+          {locale === 'zh' ? '🔥 立即预测夺冠' : '🔥 Predict Champion'}
+        </Link>
+      </section>
+
       {/* Stats Section */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="card text-center relative overflow-hidden group">
